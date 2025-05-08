@@ -5,8 +5,8 @@
 
 define('DB_SERVER', 'localhost');
 define('DB_USER', 'root');
-define('DB_PASSWORD', 'root_access');
-define('DB_NAME', 'base');
+define('DB_PASSWORD', '');
+define('DB_NAME', 'hleb-main');
 
 /**
  * Підключення до бази даних
