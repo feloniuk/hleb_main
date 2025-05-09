@@ -189,3 +189,41 @@ CREATE TABLE IF NOT EXISTS `imgs` (
 INSERT INTO `imgs` (`id`, `zag`, `comment`, `content`) VALUES
 (1, 'Знижка 15% на весь асортимент', 'Шановні клієнти! З 1 по 10 травня діє знижка 15% на весь асортимент продукції від нашої пекарні.', 'img/reklama/sale15.jpg'),
 (2, 'Нова продукція - Хліб зерновий', 'Раді повідомити про випуск нової продукції - Хліб зерновий з додаванням насіння льону, соняшника та гарбуза.', 'img/reklama/new_bread.jpg');
+
+-- Проверка и создание таблицы system_log
+CREATE TABLE IF NOT EXISTS `system_log` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `action` VARCHAR(255) NOT NULL,
+    `user_id` INT,
+    `timestamp` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `details` TEXT,
+    `ip_address` VARCHAR(45),
+    `level` VARCHAR(20) DEFAULT 'info'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- Проверка и создание таблицы system_settings
+CREATE TABLE IF NOT EXISTS `system_settings` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `setting_key` VARCHAR(255) NOT NULL UNIQUE,
+    `setting_value` TEXT,
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+-- Добавление базовых настроек для журнала
+INSERT INTO `system_settings` (`setting_key`, `setting_value`)
+VALUES ('enable_logging', '1'),
+       ('log_level', 'info'),
+       ('log_retention', '30')
+ON DUPLICATE KEY UPDATE `setting_value` = VALUES(`setting_value`);
+
+-- Добавление записи в журнал о создании таблицы (первая запись)
+INSERT INTO `system_log` (`action`, `user_id`, `details`, `ip_address`, `level`)
+VALUES ('Інсталяція системи', 3, 'Таблиці системного журналу створені', '127.0.0.1', 'info');
+
+-- Добавление полей status в таблицу zayavki если они не существуют
+ALTER TABLE `zayavki` 
+ADD COLUMN IF NOT EXISTS `status` VARCHAR(20) DEFAULT 'нове' AFTER `doba`;
+
+-- Инициализация статусов для существующих заказов
+UPDATE `zayavki` SET `status` = 'нове' WHERE `status` IS NULL;
