@@ -19,42 +19,67 @@ $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 $limit = 12; // Кількість продуктів на сторінці
 $offset = ($page - 1) * $limit;
 
-// Формування запиту
-$query = "SELECT * FROM product WHERE 1=1";
+// Формування запиту для підрахунку загальної кількості
 $countQuery = "SELECT COUNT(*) as total FROM product WHERE 1=1";
-
-$params = [];
-$types = '';
+$countParams = array();
+$countTypes = "";
 
 if (!empty($search)) {
-    $query .= " AND nazvanie LIKE ?";
     $countQuery .= " AND nazvanie LIKE ?";
     $searchParam = '%' . $search . '%';
-    $params[] = $searchParam;
-    $types .= 's';
+    $countParams[] = $searchParam;
+    $countTypes = "s";
 }
-
-$query .= " ORDER BY nazvanie LIMIT ? OFFSET ?";
-$params[] = $limit;
-$params[] = $offset;
-$types .= 'ii';
 
 // Виконання запиту для підрахунку загальної кількості
 $countStmt = mysqli_prepare($connection, $countQuery);
-if (!empty($search)) {
-    mysqli_stmt_bind_param($countStmt, "s", $searchParam);
+if (!$countStmt) {
+    die("Помилка підготовки запиту: " . mysqli_error($connection));
 }
+
+if (!empty($countParams)) {
+    // Якщо є параметри для пошуку, прив'язуємо їх
+    mysqli_stmt_bind_param($countStmt, $countTypes, $countParams[0]);
+}
+
 mysqli_stmt_execute($countStmt);
 $countResult = mysqli_stmt_get_result($countStmt);
 $totalCount = mysqli_fetch_assoc($countResult)['total'];
 $totalPages = ceil($totalCount / $limit);
 
+// Формування основного запиту
+$query = "SELECT * FROM product WHERE 1=1";
+$params = array();
+$types = "";
+
+if (!empty($search)) {
+    $query .= " AND nazvanie LIKE ?";
+    $searchParam = '%' . $search . '%';
+    $params[] = $searchParam;
+    $types .= "s";
+}
+
+$query .= " ORDER BY nazvanie LIMIT ? OFFSET ?";
+$params[] = $limit;
+$params[] = $offset;
+$types .= "ii";
+
 // Виконання основного запиту
 $stmt = mysqli_prepare($connection, $query);
-if (!empty($params)) {
-    array_unshift($params, $types);
-    call_user_func_array('mysqli_stmt_bind_param', array_merge([$stmt], $params));
+if (!$stmt) {
+    die("Помилка підготовки запиту: " . mysqli_error($connection));
 }
+
+// Прив'язка параметрів з використанням call_user_func_array для правильної передачі по посиланню
+if (!empty($params)) {
+    // Створюємо масив для call_user_func_array, де всі параметри передаються по посиланню
+    $bindParams = array($stmt, $types);
+    foreach ($params as $key => $value) {
+        $bindParams[] = &$params[$key];
+    }
+    call_user_func_array('mysqli_stmt_bind_param', $bindParams);
+}
+
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 

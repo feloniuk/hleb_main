@@ -88,8 +88,13 @@ $ordersQuery .= " ORDER BY z.data DESC, z.idd DESC";
 $stmt = mysqli_prepare($connection, $ordersQuery);
 
 if (!empty($params)) {
-    // Прив'язка параметрів
-    $bindParams = array_merge([$stmt, $types], $params);
+    // Створення масиву параметрів з посиланнями
+    $bindParams = array($stmt, $types);
+    for ($i = 0; $i < count($params); $i++) {
+        $bindParams[] = &$params[$i];
+    }
+    
+    // Використання call_user_func_array для прив'язки параметрів
     call_user_func_array('mysqli_stmt_bind_param', $bindParams);
 }
 
@@ -114,13 +119,29 @@ if (!empty($params)) {
     
     $stmtStats = mysqli_prepare($connection, $statsQuery);
     
-    // Прив'язка параметрів
-    $bindParams = array_merge([$stmtStats, $types], $params);
-    call_user_func_array('mysqli_stmt_bind_param', $bindParams);
-    
-    mysqli_stmt_execute($stmtStats);
-    $statsResult = mysqli_stmt_get_result($stmtStats);
-    $stats = mysqli_fetch_assoc($statsResult);
+    if ($stmtStats) {
+        // Створення масиву параметрів з посиланнями для статистики
+        $bindParamsStats = array($stmtStats, $types);
+        for ($i = 0; $i < count($params); $i++) {
+            $bindParamsStats[] = &$params[$i];
+        }
+        
+        // Використання call_user_func_array для прив'язки параметрів
+        call_user_func_array('mysqli_stmt_bind_param', $bindParamsStats);
+        
+        mysqli_stmt_execute($stmtStats);
+        $statsResult = mysqli_stmt_get_result($stmtStats);
+        $stats = mysqli_fetch_assoc($statsResult);
+    } else {
+        // Якщо сталася помилка при підготовці запиту
+        $stats = array(
+            'total_orders' => 0,
+            'total_quantity' => 0,
+            'total_amount' => 0,
+            'unique_products' => 0,
+            'unique_clients' => 0
+        );
+    }
 } else {
     $statsResult = mysqli_query($connection, $statsQuery);
     $stats = mysqli_fetch_assoc($statsResult);

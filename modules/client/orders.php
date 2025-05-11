@@ -23,47 +23,70 @@ $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 $limit = 10;
 $offset = ($page - 1) * $limit;
 
-// Формування базового запиту
-$query = "SELECT z.*, p.nazvanie as product_name, p.ves, p.zena, (z.kol * p.zena) as total_price
-           FROM zayavki z
-           JOIN product p ON z.id = p.id
-           WHERE z.idklient = ?";
-
-$countQuery = "SELECT COUNT(*) as total FROM zayavki z WHERE z.idklient = ?";
-
-$params = [$clientId];
-$types = "i";
+// Підготовка запиту для загальної кількості записів
+$countSql = "SELECT COUNT(*) as total FROM zayavki WHERE idklient = ?";
+$countParams = array($clientId);
+$countTypes = "i";
 
 // Додавання фільтрації за статусом
 if (!empty($status)) {
-    $query .= " AND z.status = ?";
-    $countQuery .= " AND z.status = ?";
-    $params[] = $status;
-    $types .= "s";
+    $countSql .= " AND status = ?";
+    $countParams[] = $status;
+    $countTypes .= "s";
 }
-
-// Додавання сортування та обмеження
-$query .= " ORDER BY z.data DESC, z.idd DESC LIMIT ? OFFSET ?";
-$params[] = $limit;
-$params[] = $offset;
-$types .= "ii";
 
 // Виконання запиту для підрахунку загальної кількості
-$countStmt = mysqli_prepare($connection, $countQuery);
-if (count($params) == 1) {
-    mysqli_stmt_bind_param($countStmt, "i", $params[0]);
-} else {
-    mysqli_stmt_bind_param($countStmt, "is", $params[0], $params[1]);
+$countStmt = mysqli_prepare($connection, $countSql);
+if (!$countStmt) {
+    die("Помилка підготовки запиту: " . mysqli_error($connection));
 }
+
+// Прив'язка параметрів для запиту підрахунку
+if ($countTypes === "i") {
+    mysqli_stmt_bind_param($countStmt, $countTypes, $clientId);
+} else {
+    mysqli_stmt_bind_param($countStmt, $countTypes, $clientId, $status);
+}
+
 mysqli_stmt_execute($countStmt);
 $countResult = mysqli_stmt_get_result($countStmt);
 $totalCount = mysqli_fetch_assoc($countResult)['total'];
 $totalPages = ceil($totalCount / $limit);
 
-// Виконання основного запиту
-$stmt = mysqli_prepare($connection, $query);
-array_unshift($params, $types);
-call_user_func_array('mysqli_stmt_bind_param', array_merge([$stmt], $params));
+// Формування основного запиту
+$sql = "SELECT z.*, p.nazvanie as product_name, p.ves, p.zena, (z.kol * p.zena) as total_price
+           FROM zayavki z
+           JOIN product p ON z.id = p.id
+           WHERE z.idklient = ?";
+$params = array($clientId);
+$types = "i";
+
+// Додавання фільтрації за статусом
+if (!empty($status)) {
+    $sql .= " AND z.status = ?";
+    $params[] = $status;
+    $types .= "s";
+}
+
+// Додавання сортування та обмеження
+$sql .= " ORDER BY z.data DESC, z.idd DESC LIMIT ? OFFSET ?";
+$params[] = $limit;
+$params[] = $offset;
+$types .= "ii";
+
+// Підготовка та виконання основного запиту
+$stmt = mysqli_prepare($connection, $sql);
+if (!$stmt) {
+    die("Помилка підготовки запиту: " . mysqli_error($connection));
+}
+
+// Прив'язка параметрів з використанням call_user_func_array
+$bindParams = array($stmt, $types);
+foreach ($params as $key => $value) {
+    $bindParams[] = &$params[$key];
+}
+call_user_func_array('mysqli_stmt_bind_param', $bindParams);
+
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 

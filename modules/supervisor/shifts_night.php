@@ -14,56 +14,76 @@ if (!checkAccess(['brigadir'])) {
 $connection = connectDatabase();
 $success = '';
 $error = '';
+$warning = '';
+
+// Перевірка, чи є вже заказ в виробництві на поточну дату та зміну
+$checkExistingQuery = "SELECT COUNT(*) as count FROM newzakaz2 WHERE DATE(data) = CURDATE() AND doba='нічна'";
+$existingResult = mysqli_query($connection, $checkExistingQuery);
+$existingCount = mysqli_fetch_assoc($existingResult)['count'];
+$alreadyInProduction = ($existingCount > 0);
 
 // Обробка відправки замовлень на виробництво
 if (isset($_POST['send_to_production'])) {
-    // Додавання даних в таблицю zakazu (запис про нове замовлення)
-    $insertZakazuQuery = "INSERT INTO zakazu (data, doba) VALUES (CURDATE(), 'нічна')";
-    $insertZakazuResult = mysqli_query($connection, $insertZakazuQuery);
-    
-    if ($insertZakazuResult) {
-        $zakazId = mysqli_insert_id($connection);
+    // Перевірка чи є замовлення в виробництві
+    if ($alreadyInProduction) {
+        $warning = "Замовлення на нічну зміну вже в виробництві. Якщо потрібно додати нові замовлення, зверніться до адміністратора.";
+    } else {
+        // Додавання даних в таблицю zakazu (запис про нове замовлення)
+        $insertZakazuQuery = "INSERT INTO zakazu (data, doba) VALUES (CURDATE(), 'нічна')";
+        $insertZakazuResult = mysqli_query($connection, $insertZakazuQuery);
         
-        // Отримання всіх нічних замовлень та додавання їх в newzakaz2
-        $getNightOrdersQuery = "SELECT idd, idklient, id, kol, data, doba 
+        if ($insertZakazuResult) {
+            $zakazId = mysqli_insert_id($connection);
+            
+            // Отримання всіх нічних замовлень та додавання їх в newzakaz2
+            $getNightOrdersQuery = "SELECT idd, idklient, id, kol, data, doba 
                                 FROM zayavki 
                                 WHERE doba='нічна' AND DATE(data) = CURDATE()";
-        $nightOrdersResult = mysqli_query($connection, $getNightOrdersQuery);
-        
-        $allInsertedSuccessfully = true;
-        while ($order = mysqli_fetch_assoc($nightOrdersResult)) {
-            $insertOrderQuery = "INSERT INTO newzakaz2 (idd, idklient, id, kol, data, doba)
-                                 VALUES (?, ?, ?, ?, ?, ?)";
-            $stmt = mysqli_prepare($connection, $insertOrderQuery);
-            mysqli_stmt_bind_param(
-                $stmt, 
-                "iiisss", 
-                $order['idd'], 
-                $order['idklient'], 
-                $order['id'], 
-                $order['kol'], 
-                $order['data'], 
-                $order['doba']
-            );
+            $nightOrdersResult = mysqli_query($connection, $getNightOrdersQuery);
             
-            if (!mysqli_stmt_execute($stmt)) {
-                $allInsertedSuccessfully = false;
-                $error = "Помилка при додаванні замовлення #" . $order['idd'] . ": " . mysqli_error($connection);
-                break;
+            $allInsertedSuccessfully = true;
+            while ($order = mysqli_fetch_assoc($nightOrdersResult)) {
+                $insertOrderQuery = "INSERT INTO newzakaz2 (idd, idklient, id, kol, data, doba)
+                                 VALUES (?, ?, ?, ?, ?, ?)";
+                $stmt = mysqli_prepare($connection, $insertOrderQuery);
+                
+                // Створення масиву параметрів з посиланнями
+                $idd = $order['idd'];
+                $idklient = $order['idklient'];
+                $id = $order['id'];
+                $kol = $order['kol'];
+                $data = $order['data'];
+                $doba = $order['doba'];
+                
+                mysqli_stmt_bind_param($stmt, "iiisss", $idd, $idklient, $id, $kol, $data, $doba);
+                
+                if (!mysqli_stmt_execute($stmt)) {
+                    $allInsertedSuccessfully = false;
+                    $error = "Помилка при додаванні замовлення #" . $order['idd'] . ": " . mysqli_error($connection);
+                    break;
+                }
             }
+            
+            if ($allInsertedSuccessfully) {
+                $success = "Замовлення успішно відправлені на виробництво!";
+                
+                // Оновлення статусу замовлень на "у виробництві"
+                $updateStatusQuery = "UPDATE zayavki SET status = 'у виробництві' 
+                                     WHERE doba='нічна' AND DATE(data) = CURDATE()";
+                mysqli_query($connection, $updateStatusQuery);
+                
+                // Оновлюємо стан виробництва після успішного додавання
+                $alreadyInProduction = true;
+            }
+        } else {
+            $error = "Помилка при створенні замовлення: " . mysqli_error($connection);
         }
-        
-        if ($allInsertedSuccessfully) {
-            $success = "Замовлення успішно відправлені на виробництво!";
-        }
-    } else {
-        $error = "Помилка при створенні замовлення: " . mysqli_error($connection);
     }
 }
 
 // Отримання замовлень нічної зміни
 $ordersQuery = "SELECT z.idd, z.idklient, k.name as client_name, z.id, p.nazvanie as product_name, 
-                z.kol, z.data, z.doba
+                z.kol, z.data, z.doba, z.status
                 FROM zayavki z
                 JOIN klientu k ON z.idklient = k.id
                 JOIN product p ON z.id = p.id
@@ -152,10 +172,24 @@ $totalQuantityQuery = "SELECT SUM(kol) as total FROM zayavki WHERE doba='ніч�
 $totalQuantityResult = mysqli_query($connection, $totalQuantityQuery);
 $totalQuantity = mysqli_fetch_assoc($totalQuantityResult)['total'];
 
+// Отримання інформації про статуси замовлень
+$statusQuery = "SELECT 
+                  SUM(CASE WHEN status = 'нове' THEN 1 ELSE 0 END) as new_count,
+                  SUM(CASE WHEN status = 'у виробництві' THEN 1 ELSE 0 END) as in_production_count,
+                  SUM(CASE WHEN status = 'виконано' THEN 1 ELSE 0 END) as completed_count,
+                  SUM(CASE WHEN status = 'скасовано' THEN 1 ELSE 0 END) as cancelled_count,
+                  COUNT(*) as total_count
+                FROM zayavki 
+                WHERE doba='нічна' AND DATE(data) = CURDATE()";
+$statusResult = mysqli_query($connection, $statusQuery);
+$statusInfo = mysqli_fetch_assoc($statusResult);
+
+// Перевірка чи всі замовлення в виробництві (для показу відповідного повідомлення)
+$allInProduction = ($statusInfo['in_production_count'] == $statusInfo['total_count'] && $statusInfo['total_count'] > 0);
+
 include_once '../../includes/header.php';
 ?>
 
-<!-- Головне меню -->
 <div class="row mb-4">
     <div class="col-md-12">
         <nav class="nav main-menu nav-pills nav-fill">
@@ -166,7 +200,7 @@ include_once '../../includes/header.php';
                 <i class="fas fa-clipboard-list"></i> Замовлення
             </a>
             <a class="nav-link active dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="fas fa-calendar-day"></i> Зміни
+                <i class="fas fa-calendar-night"></i> Зміни
             </a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdown">
                 <a class="dropdown-item" href="shifts_day.php">Денна зміна</a>
@@ -195,6 +229,20 @@ include_once '../../includes/header.php';
 <?php if (!empty($error)): ?>
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
         <?php echo $error; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($warning)): ?>
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <?php echo $warning; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<?php if ($alreadyInProduction): ?>
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+        <i class="fas fa-info-circle me-2"></i> Замовлення на нічну зміну вже відправлено в виробництво.
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 <?php endif; ?>
@@ -229,14 +277,109 @@ include_once '../../includes/header.php';
                     <div class="card-body">
                         <form method="post" action="">
                             <h5 class="card-title">Відправити на виробництво</h5>
-                            <button type="submit" name="send_to_production" class="btn btn-primary btn-lg mt-3" <?php echo (mysqli_num_rows($ordersResult) == 0) ? 'disabled' : ''; ?> onclick="return confirm('Ви впевнені, що хочете відправити ці замовлення на виробництво?');">
+                            <button type="submit" name="send_to_production" class="btn btn-primary btn-lg mt-3" 
+                                <?php echo ($alreadyInProduction || mysqli_num_rows($ordersResult) == 0) ? 'disabled' : ''; ?> 
+                                onclick="return confirm('Ви впевнені, що хочете відправити ці замовлення на виробництво?');">
                                 <i class="fas fa-paper-plane me-2"></i> Відправити
                             </button>
+                            <?php if ($alreadyInProduction): ?>
+                                <div class="mt-2 text-muted">
+                                    <small><i class="fas fa-info-circle me-1"></i> Замовлення вже відправлено в виробництво</small>
+                                </div>
+                            <?php endif; ?>
                         </form>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
+</div>
+
+<!-- Статус замовлень -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-tasks me-2"></i> Статус замовлень
+        </h5>
+    </div>
+    <div class="card-body">
+        <!-- Прогрес бар для відображення статусу всіх замовлень -->
+        <div class="progress mb-3" style="height: 25px;">
+            <?php
+            $newPercent = ($statusInfo['total_count'] > 0) ? ($statusInfo['new_count'] / $statusInfo['total_count'] * 100) : 0;
+            $inProductionPercent = ($statusInfo['total_count'] > 0) ? ($statusInfo['in_production_count'] / $statusInfo['total_count'] * 100) : 0;
+            $completedPercent = ($statusInfo['total_count'] > 0) ? ($statusInfo['completed_count'] / $statusInfo['total_count'] * 100) : 0;
+            $cancelledPercent = ($statusInfo['total_count'] > 0) ? ($statusInfo['cancelled_count'] / $statusInfo['total_count'] * 100) : 0;
+            ?>
+            <?php if ($newPercent > 0): ?>
+                <div class="progress-bar bg-info" role="progressbar" style="width: <?php echo $newPercent; ?>%" 
+                    aria-valuenow="<?php echo $newPercent; ?>" aria-valuemin="0" aria-valuemax="100" 
+                    data-bs-toggle="tooltip" title="Нові: <?php echo $statusInfo['new_count']; ?>">
+                    Нові: <?php echo $statusInfo['new_count']; ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($inProductionPercent > 0): ?>
+                <div class="progress-bar bg-warning text-dark" role="progressbar" style="width: <?php echo $inProductionPercent; ?>%" 
+                    aria-valuenow="<?php echo $inProductionPercent; ?>" aria-valuemin="0" aria-valuemax="100"
+                    data-bs-toggle="tooltip" title="У виробництві: <?php echo $statusInfo['in_production_count']; ?>">
+                    У виробництві: <?php echo $statusInfo['in_production_count']; ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($completedPercent > 0): ?>
+                <div class="progress-bar bg-success" role="progressbar" style="width: <?php echo $completedPercent; ?>%" 
+                    aria-valuenow="<?php echo $completedPercent; ?>" aria-valuemin="0" aria-valuemax="100"
+                    data-bs-toggle="tooltip" title="Виконані: <?php echo $statusInfo['completed_count']; ?>">
+                    Виконані: <?php echo $statusInfo['completed_count']; ?>
+                </div>
+            <?php endif; ?>
+            
+            <?php if ($cancelledPercent > 0): ?>
+                <div class="progress-bar bg-danger" role="progressbar" style="width: <?php echo $cancelledPercent; ?>%" 
+                    aria-valuenow="<?php echo $cancelledPercent; ?>" aria-valuemin="0" aria-valuemax="100"
+                    data-bs-toggle="tooltip" title="Скасовані: <?php echo $statusInfo['cancelled_count']; ?>">
+                    Скасовані: <?php echo $statusInfo['cancelled_count']; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+        
+        <!-- Легенда -->
+        <div class="row">
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <div class="badge bg-info me-2">&nbsp;&nbsp;&nbsp;</div>
+                    <div>Нові: <?php echo $statusInfo['new_count']; ?></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <div class="badge bg-warning me-2">&nbsp;&nbsp;&nbsp;</div>
+                    <div>У виробництві: <?php echo $statusInfo['in_production_count']; ?></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <div class="badge bg-success me-2">&nbsp;&nbsp;&nbsp;</div>
+                    <div>Виконані: <?php echo $statusInfo['completed_count']; ?></div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <div class="badge bg-danger me-2">&nbsp;&nbsp;&nbsp;</div>
+                    <div>Скасовані: <?php echo $statusInfo['cancelled_count']; ?></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Кнопка переходу на сторінку виробництва -->
+        <?php if ($alreadyInProduction): ?>
+            <div class="mt-3 text-center">
+                <a href="production.php?date=<?php echo date('Y-m-d'); ?>&shift=нічна" class="btn btn-primary">
+                    <i class="fas fa-industry me-1"></i> Перейти до управління виробництвом
+                </a>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -411,6 +554,7 @@ include_once '../../includes/header.php';
                         <th>Продукт</th>
                         <th>Кількість</th>
                         <th>Дата</th>
+                        <th>Статус</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -426,11 +570,41 @@ include_once '../../includes/header.php';
                                 <td><?php echo htmlspecialchars($order['product_name']); ?></td>
                                 <td><?php echo $order['kol']; ?></td>
                                 <td><?php echo formatDate($order['data']); ?></td>
+                                <td>
+                                    <?php
+                                    $statusClass = '';
+                                    $statusText = '';
+                                    
+                                    switch ($order['status']) {
+                                        case 'нове':
+                                            $statusClass = 'bg-info';
+                                            $statusText = 'Нове';
+                                            break;
+                                        case 'у виробництві':
+                                            $statusClass = 'bg-warning text-dark';
+                                            $statusText = 'У виробництві';
+                                            break;
+                                        case 'виконано':
+                                            $statusClass = 'bg-success';
+                                            $statusText = 'Виконано';
+                                            break;
+                                        case 'скасовано':
+                                            $statusClass = 'bg-danger';
+                                            $statusText = 'Скасовано';
+                                            break;
+                                        default:
+                                            $statusClass = 'bg-secondary';
+                                            $statusText = 'Невідомо';
+                                            break;
+                                    }
+                                    ?>
+                                    <span class="badge <?php echo $statusClass; ?>"><?php echo $statusText; ?></span>
+                                </td>
                             </tr>
                         <?php endwhile; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="5" class="text-center">Немає замовлень на нічну зміну</td>
+                            <td colspan="6" class="text-center">Немає замовлень на нічну зміну</td>
                         </tr>
                     <?php endif; ?>
                 </tbody>
@@ -438,3 +612,15 @@ include_once '../../includes/header.php';
         </div>
     </div>
 </div>
+
+<script>
+    // Ініціалізація тултіпів для прогрес-бару
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
+
+<?php include_once '../../includes/footer.php'; ?>
