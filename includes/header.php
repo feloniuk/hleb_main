@@ -8,11 +8,21 @@ $pageTitle = $pageTitle ?? 'Система управління "Одеськи�
 
 // Отримання поточного користувача
 $currentUser = null;
+$userType = getUserType();
+
 if (isset($_SESSION['id'])) {
-    $userMainId = $_SESSION['id'];
-    $userQuery = "SELECT * FROM polzovateli WHERE id = ?";
+    $userId = $_SESSION['id'];
+    
+    if ($userType === 'client') {
+        // Отримання даних клієнта
+        $userQuery = "SELECT * FROM klientu WHERE id = ?";
+    } else {
+        // Отримання даних співробітника
+        $userQuery = "SELECT * FROM polzovateli WHERE id = ?";
+    }
+    
     $stmt = mysqli_prepare($connection, $userQuery);
-    mysqli_stmt_bind_param($stmt, "i", $userMainId);
+    mysqli_stmt_bind_param($stmt, "i", $userId);
     mysqli_stmt_execute($stmt);
     $userResult = mysqli_stmt_get_result($stmt);
     
@@ -23,6 +33,24 @@ if (isset($_SESSION['id'])) {
 
 // Визначення ролі користувача
 $userRole = getUserRole();
+
+// Визначення URL для кабінету користувача
+$dashboardUrl = '#';
+if ($userType === 'client') {
+    $dashboardUrl = '../../modules/client/dashboard.php';
+} else {
+    switch ($userRole) {
+        case 'manager':
+            $dashboardUrl = '../../modules/manager/dashboard.php';
+            break;
+        case 'brigadir':
+            $dashboardUrl = '../../modules/supervisor/dashboard.php';
+            break;
+        case 'admin':
+            $dashboardUrl = '../../modules/admin/dashboard.php';
+            break;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="uk">
@@ -37,7 +65,7 @@ $userRole = getUserRole();
 <body>
     <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
         <div class="container">
-            <a class="navbar-brand" href="dashboard.php">
+            <a class="navbar-brand" href="<?php echo $dashboardUrl; ?>">
                 <img src="../../assets/img/logo.png" alt="ТОВ Одеський Коровай" class="logo">
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
@@ -49,33 +77,51 @@ $userRole = getUserRole();
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                 <i class="fas fa-user me-1"></i>
-                                <?php echo $currentUser ? htmlspecialchars($currentUser['name']) : 'Користувач'; ?>
+                                <?php 
+                                if ($currentUser) {
+                                    // Для клієнтів показуємо назву організації
+                                    if ($userType === 'client') {
+                                        echo htmlspecialchars($currentUser['name']);
+                                    } else {
+                                        // Для співробітників показуємо ім'я
+                                        echo htmlspecialchars($currentUser['name']);
+                                    }
+                                } else {
+                                    echo 'Користувач';
+                                }
+                                ?>
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
                                 <li>
                                     <span class="dropdown-item-text text-muted">
                                         <?php 
-                                        switch ($userRole) {
-                                            case 'manager':
-                                                echo 'Менеджер';
-                                                break;
-                                            case 'brigadir':
-                                                echo 'Бригадир';
-                                                break;
-                                            case 'admin':
-                                                echo 'Адміністратор';
-                                                break;
-                                            case 'client':
-                                                echo 'Клієнт';
-                                                break;
-                                            default:
-                                                echo 'Користувач';
-                                                break;
+                                        if ($userType === 'client') {
+                                            echo 'Клієнт';
+                                        } else {
+                                            switch ($userRole) {
+                                                case 'manager':
+                                                    echo 'Менеджер';
+                                                    break;
+                                                case 'brigadir':
+                                                    echo 'Бригадир';
+                                                    break;
+                                                case 'admin':
+                                                    echo 'Адміністратор';
+                                                    break;
+                                                default:
+                                                    echo 'Користувач';
+                                                    break;
+                                            }
                                         }
                                         ?>
                                     </span>
                                 </li>
                                 <li><hr class="dropdown-divider"></li>
+                                <?php if ($userType === 'client'): ?>
+                                <li><a class="dropdown-item" href="../../modules/client/profile.php"><i class="fas fa-user-cog me-1"></i> Профіль</a></li>
+                                <li><a class="dropdown-item" href="../../modules/client/orders.php"><i class="fas fa-clipboard-list me-1"></i> Мої замовлення</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <?php endif; ?>
                                 <li><a class="dropdown-item" href="../../logout.php"><i class="fas fa-sign-out-alt me-1"></i> Вийти</a></li>
                             </ul>
                         </li>

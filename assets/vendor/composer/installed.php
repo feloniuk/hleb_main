@@ -1,0 +1,41 @@
+<?php return array(
+    'root' => array(
+        'name' => 'vendor/hleb',
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => '958cce384c1afe1b03577406c3094a56e1c4c717',
+        'type' => 'project',
+        'install_path' => __DIR__ . '/../../',
+        'aliases' => array(),
+        'dev' => true,
+    ),
+    'versions' => array(
+        'setasign/fpdf' => array(
+            'pretty_version' => '1.8.6',
+            'version' => '1.8.6.0',
+            'reference' => '0838e0ee4925716fcbbc50ad9e1799b5edfae0a0',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../setasign/fpdf',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'setasign/tfpdf' => array(
+            'pretty_version' => 'v1.33',
+            'version' => '1.33.0.0',
+            'reference' => '050de12ab5359ce475dab49bae5cedbcf455f708',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../setasign/tfpdf',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+        'vendor/hleb' => array(
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => '958cce384c1afe1b03577406c3094a56e1c4c717',
+            'type' => 'project',
+            'install_path' => __DIR__ . '/../../',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
+    ),
+);

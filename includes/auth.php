@@ -23,6 +23,7 @@ function loginUser($login, $password) {
     
     $connection = connectDatabase();
     
+    // Спочатку перевіряємо в таблиці співробітників (polzovateli)
     $sql = "SELECT * FROM polzovateli WHERE login=?";
     $stmt = mysqli_prepare($connection, $sql);
     mysqli_stmt_bind_param($stmt, "s", $login);
@@ -36,6 +37,26 @@ function loginUser($login, $password) {
         if ($password == $user['password']) {
             $_SESSION['login'] = $user['login'];
             $_SESSION['id'] = $user['id'];
+            $_SESSION['user_type'] = 'staff'; // Позначаємо, що це співробітник
+            return $user;
+        }
+    }
+    
+    // Якщо не знайдено в polzovateli, перевіряємо в таблиці клієнтів (klientu)
+    $sql = "SELECT * FROM klientu WHERE login=?";
+    $stmt = mysqli_prepare($connection, $sql);
+    mysqli_stmt_bind_param($stmt, "s", $login);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    
+    if (mysqli_num_rows($result) == 1) {
+        $user = mysqli_fetch_assoc($result);
+        
+        // Якщо паролі співпадають
+        if ($password == $user['password']) {
+            $_SESSION['login'] = $user['login'];
+            $_SESSION['id'] = $user['id'];
+            $_SESSION['user_type'] = 'client'; // Позначаємо, що це клієнт
             return $user;
         }
     }
@@ -63,6 +84,12 @@ function getUserRole() {
         return null;
     }
     
+    // Якщо це клієнт
+    if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'client') {
+        return 'client';
+    }
+    
+    // Якщо це співробітник, перевіряємо конкретну роль
     $userId = $_SESSION['id'];
     
     switch ($userId) {
@@ -73,7 +100,7 @@ function getUserRole() {
         case 3: 
             return 'admin';
         default: 
-            return 'client';
+            return 'unknown'; // Невідома роль співробітника
     }
 }
 
@@ -91,6 +118,56 @@ function checkAccess($allowedRoles) {
     }
     
     return in_array($userRole, $allowedRoles);
+}
+
+/**
+ * Отримати тип користувача (співробітник чи клієнт)
+ * 
+ * @return string|null
+ */
+function getUserType() {
+    return isset($_SESSION['user_type']) ? $_SESSION['user_type'] : null;
+}
+
+/**
+ * Отримати дані поточного авторизованого користувача
+ * 
+ * @return array|null
+ */
+function getCurrentUser() {
+    if (!isUserLoggedIn()) {
+        return null;
+    }
+    
+    $connection = connectDatabase();
+    $userId = $_SESSION['id'];
+    $userType = getUserType();
+    
+    if ($userType === 'client') {
+        // Отримуємо дані клієнта
+        $sql = "SELECT * FROM klientu WHERE id = ?";
+    } else {
+        // Отримуємо дані співробітника
+        $sql = "SELECT * FROM polzovateli WHERE id = ?";
+    }
+    
+    $stmt = mysqli_prepare($connection, $sql);
+    mysqli_stmt_bind_param($stmt, "i", $userId);
+    mysqli_stmt_execute($stmt);
+    $result = mysqli_stmt_get_result($stmt);
+    
+    if (mysqli_num_rows($result) === 1) {
+        $user = mysqli_fetch_assoc($result);
+        
+        // Видаляємо пароль з даних користувача з міркувань безпеки
+        unset($user['password']);
+        
+        mysqli_close($connection);
+        return $user;
+    }
+    
+    mysqli_close($connection);
+    return null;
 }
 
 /**

@@ -28,10 +28,18 @@ include_once '../../includes/header.php';
             <a class="nav-link" href="orders.php">
                 <i class="fas fa-clipboard-list"></i> Замовлення
             </a>
+            
+            <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-calendar-day"></i> Зміни
+            </a>
+            <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+                <a class="dropdown-item" href="shifts_day.php">Денна зміна</a>
+                <a class="dropdown-item" href="shifts_night.php">Нічна зміна</a>
+            </div>
             <a class="nav-link active" href="scanner.php">
                 <i class="fas fa-barcode"></i> Сканер
             </a>
-            <a class="nav-link" href="production.php">
+            <a class="nav-link" href="products.php">
                 <i class="fas fa-bread-slice"></i> Продукція
             </a>
             <a class="nav-link" href="video.php">

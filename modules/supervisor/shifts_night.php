@@ -80,30 +80,64 @@ $ingredientsQuery = "SELECT z.id, p.nazvanie, SUM(z.kol) as total_quantity
                      ORDER BY p.nazvanie";
 $ingredientsResult = mysqli_query($connection, $ingredientsQuery);
 
-// Розрахунок необхідної кількості сировини (аналогічно shifts_day.php)
+// Розрахунок необхідної кількості сировини
 $flourHighGrade = 0;
 $flourFirstGrade = 0;
+$flourSecondGrade = 0;
+$ryeFlour = 0;
 $water = 0;
 $salt = 0;
 $sugar = 0;
 $yeast = 0;
 $milk = 0;
 $butter = 0;
+$seeds = 0;
 
+// Обробка кожного продукту і розрахунок сировини
 $products = [];
 if (mysqli_num_rows($ingredientsResult) > 0) {
     while ($product = mysqli_fetch_assoc($ingredientsResult)) {
         $products[] = $product;
         
-        // Коефіцієнти для нічної зміни можуть бути трохи іншими
+        // Обчислення необхідної кількості сировини в залежності від продукту
         switch($product['id']) {
+            // Хліб Обідній
             case 1:
                 $flourHighGrade += $product['total_quantity'] * 0.35;
+                $flourFirstGrade += $product['total_quantity'] * 0.25;
                 $water += $product['total_quantity'] * 0.4;
                 $salt += $product['total_quantity'] * 0.002;
+                $sugar += $product['total_quantity'] * 0.003;
                 $yeast += $product['total_quantity'] * 0.018;
                 break;
-            // Додати інші продукти з відповідними коефіцієнтами
+                
+            // Хліб Сімейний
+            case 2:
+                $flourHighGrade += $product['total_quantity'] * 0.55;
+                $milk += $product['total_quantity'] * 0.14;
+                $butter += $product['total_quantity'] * 0.04;
+                $sugar += $product['total_quantity'] * 0.003;
+                $water += $product['total_quantity'] * 0.18;
+                $yeast += $product['total_quantity'] * 0.014;
+                break;
+                
+            // Багет Французький
+            case 3:
+                $flourHighGrade += $product['total_quantity'] * 0.23;
+                $water += $product['total_quantity'] * 0.14;
+                $salt += $product['total_quantity'] * 0.001;
+                $yeast += $product['total_quantity'] * 0.009;
+                break;
+                
+            // Інші продукти...
+            default:
+                // Середні значення для інших продуктів
+                $flourHighGrade += $product['total_quantity'] * 0.28;
+                $water += $product['total_quantity'] * 0.18;
+                $salt += $product['total_quantity'] * 0.002;
+                $sugar += $product['total_quantity'] * 0.003;
+                $yeast += $product['total_quantity'] * 0.014;
+                break;
         }
     }
 }
@@ -121,7 +155,7 @@ $totalQuantity = mysqli_fetch_assoc($totalQuantityResult)['total'];
 include_once '../../includes/header.php';
 ?>
 
-<!-- Аналогічно shifts_day.php, але для нічної зміни -->
+<!-- Головне меню -->
 <div class="row mb-4">
     <div class="col-md-12">
         <nav class="nav main-menu nav-pills nav-fill">
@@ -132,7 +166,7 @@ include_once '../../includes/header.php';
                 <i class="fas fa-clipboard-list"></i> Замовлення
             </a>
             <a class="nav-link active dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="fas fa-calendar-night"></i> Зміни
+                <i class="fas fa-calendar-day"></i> Зміни
             </a>
             <div class="dropdown-menu" aria-labelledby="navbarDropdown">
                 <a class="dropdown-item" href="shifts_day.php">Денна зміна</a>
@@ -151,7 +185,256 @@ include_once '../../includes/header.php';
     </div>
 </div>
 
-<!-- Весь інший вміст аналогічний shifts_day.php, 
-     але з налаштуваннями для нічної зміни -->
+<?php if (!empty($success)): ?>
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <?php echo $success; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
 
-<?php include_once '../../includes/footer.php'; ?>
+<?php if (!empty($error)): ?>
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <?php echo $error; ?>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+<?php endif; ?>
+
+<!-- Інформаційна панель -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <h5 class="mb-0">
+            <i class="fas fa-moon me-2"></i> Замовлення на нічну зміну - <?php echo date('d.m.Y'); ?>
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Унікальних продуктів</h5>
+                        <p class="display-4"><?php echo $uniqueProductsCount; ?></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <h5 class="card-title">Загальна кількість</h5>
+                        <p class="display-4"><?php echo $totalQuantity; ?></p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card text-center h-100">
+                    <div class="card-body">
+                        <form method="post" action="">
+                            <h5 class="card-title">Відправити на виробництво</h5>
+                            <button type="submit" name="send_to_production" class="btn btn-primary btn-lg mt-3" <?php echo (mysqli_num_rows($ordersResult) == 0) ? 'disabled' : ''; ?> onclick="return confirm('Ви впевнені, що хочете відправити ці замовлення на виробництво?');">
+                                <i class="fas fa-paper-plane me-2"></i> Відправити
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Необхідна сировина -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-calculator me-2"></i> Необхідна сировина
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <?php if ($flourHighGrade > 0): ?>
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Мука вищого ґатунку</h6>
+                                <p class="card-text fw-bold"><?php echo number_format($flourHighGrade, 2); ?> кг</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($flourFirstGrade > 0): ?>
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Мука першого ґатунку</h6>
+                                <p class="card-text fw-bold"><?php echo number_format($flourFirstGrade, 2); ?> кг</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($water > 0): ?>
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Вода</h6>
+                                <p class="card-text fw-bold"><?php echo number_format($water, 2); ?> л</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($salt > 0): ?>
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Сіль</h6>
+                                <p class="card-text fw-bold"><?php echo number_format($salt, 2); ?> кг</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($sugar > 0): ?>
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Цукор</h6>
+                                <p class="card-text fw-bold"><?php echo number_format($sugar, 2); ?> кг</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($yeast > 0): ?>
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Дріжджі</h6>
+                                <p class="card-text fw-bold"><?php echo number_format($yeast, 2); ?> кг</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($milk > 0): ?>
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Молоко</h6>
+                                <p class="card-text fw-bold"><?php echo number_format($milk, 2); ?> л</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                    
+                    <?php if ($butter > 0): ?>
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title text-muted">Масло</h6>
+                                <p class="card-text fw-bold"><?php echo number_format($butter, 2); ?> кг</p>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <div class="text-center mt-3">
+                    <a href="shift_night_pdf.php" class="btn btn-success">
+                        <i class="fas fa-file-pdf me-2"></i> Експорт в PDF
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Список продуктів для виробництва -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-bread-slice me-2"></i> Список продуктів для виробництва
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Назва продукту</th>
+                                <th>Загальна кількість</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php 
+                            // Перезапуск результату запиту
+                            mysqli_data_seek($ingredientsResult, 0);
+                            if (mysqli_num_rows($ingredientsResult) > 0): 
+                            ?>
+                                <?php while ($product = mysqli_fetch_assoc($ingredientsResult)): ?>
+                                    <tr>
+                                        <td><?php echo $product['id']; ?></td>
+                                        <td><?php echo htmlspecialchars($product['nazvanie']); ?></td>
+                                        <td><?php echo $product['total_quantity']; ?></td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="3" class="text-center">Немає продуктів для виробництва</td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Детальний список замовлень -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-list me-2"></i> Детальний список замовлень
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Клієнт</th>
+                        <th>Продукт</th>
+                        <th>Кількість</th>
+                        <th>Дата</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php 
+                    // Перезапуск результату запиту
+                    mysqli_data_seek($ordersResult, 0);
+                    if (mysqli_num_rows($ordersResult) > 0): 
+                    ?>
+                        <?php while ($order = mysqli_fetch_assoc($ordersResult)): ?>
+                            <tr>
+                                <td><?php echo $order['idd']; ?></td>
+                                <td><?php echo htmlspecialchars($order['client_name']); ?></td>
+                                <td><?php echo htmlspecialchars($order['product_name']); ?></td>
+                                <td><?php echo $order['kol']; ?></td>
+                                <td><?php echo formatDate($order['data']); ?></td>
+                            </tr>
+                        <?php endwhile; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="5" class="text-center">Немає замовлень на нічну зміну</td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
