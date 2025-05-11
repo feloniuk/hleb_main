@@ -30,13 +30,14 @@ mysqli_stmt_bind_param($stmt, "i", $userId);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 
+
 if (mysqli_num_rows($result) != 1) {
     header("Location: users.php");
     exit;
 }
 
 $user = mysqli_fetch_assoc($result);
-
+$userId = intval($user['id']);
 // Якщо користувач - клієнт, отримати додаткову інформацію
 $isClient = false;
 $clientData = null;
@@ -217,10 +218,10 @@ include_once '../../includes/header.php';
                     <label for="role" class="form-label">Роль користувача *</label>
                     <select class="form-select" id="role" name="role" required>
                         <option value="">-- Виберіть роль --</option>
-                        <option value="admin" <?php echo ($userId == 3) ? 'selected' : ''; ?>>Адміністратор</option>
-                        <option value="manager" <?php echo ($userId == 1) ? 'selected' : ''; ?>>Менеджер</option>
-                        <option value="brigadir" <?php echo ($userId == 2) ? 'selected' : ''; ?>>Бригадир</option>
-                        <option value="client" <?php echo ($isClient) ? 'selected' : ''; ?>>Клієнт</option>
+                        <option value="admin" <?= ($userId == 3) ? 'selected' : ''; ?>>Адміністратор</option>
+                        <option value="manager" <?= ($userId == 1) ? 'selected' : ''; ?>>Менеджер</option>
+                        <option value="brigadir" <?= ($userId == 2) ? 'selected' : ''; ?>>Бригадир</option>
+                        <option value="client" <?= ($isClient) ? 'selected' : ''; ?>>Клієнт</option>
                     </select>
                     <div class="invalid-feedback">
                         Будь ласка, виберіть роль користувача

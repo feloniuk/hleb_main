@@ -203,7 +203,7 @@ include_once '../../includes/header.php';
                     </ul>
                 </div>
                 
-                <a href="javascript:window.print();" class="btn btn-info ms-2">
+                <a  href="javascript:void(0);" onclick="printDiv('reportResults');" class="btn btn-info ms-2">
                     <i class="fas fa-print me-1"></i> Друк
                 </a>
             </div>
@@ -212,7 +212,7 @@ include_once '../../includes/header.php';
 </div>
 
 <!-- Результати звіту -->
-<div class="card">
+<div class="card" id="reportResults">
     <div class="card-header">
         <h5 class="mb-0">
             <?php
@@ -261,7 +261,59 @@ include_once '../../includes/header.php';
     </div>
 </div>
 <?php endif; ?>
-
+<script>
+function printDiv(divId) {
+    // Создаем iframe элемент
+    var printIframe = document.createElement('iframe');
+    printIframe.style.position = 'absolute';
+    printIframe.style.top = '-1000px';
+    printIframe.style.left = '-1000px';
+    printIframe.id = "printIframe";
+    document.body.appendChild(printIframe);
+    
+    // Получаем содержимое div, которое нужно напечатать
+    var divToPrint = document.getElementById(divId);
+    
+    // Получаем документ iframe
+    var frameDoc = printIframe.contentWindow.document;
+    
+    // Открываем документ для записи
+    frameDoc.open();
+    
+    // Добавляем базовую HTML структуру и стили
+    frameDoc.write('<html><head><title>Друк</title>');
+    
+    // Копируем все стили с основной страницы
+    var styles = document.getElementsByTagName('link');
+    for (var i = 0; i < styles.length; i++) {
+        if (styles[i].rel === 'stylesheet') {
+            frameDoc.write('<link href="' + styles[i].href + '" rel="stylesheet" type="text/css" />');
+        }
+    }
+    
+    // Закрываем head и открываем body
+    frameDoc.write('</head><body>');
+    
+    // Вставляем содержимое нужного div
+    frameDoc.write(divToPrint.innerHTML);
+    
+    // Закрываем body и html
+    frameDoc.write('</body></html>');
+    frameDoc.close();
+    
+    // Ждем полной загрузки iframe
+    setTimeout(function() {
+        // Вызываем печать
+        printIframe.contentWindow.focus();
+        printIframe.contentWindow.print();
+        
+        // Удаляем iframe после печати
+        setTimeout(function() {
+            document.body.removeChild(printIframe);
+        }, 1000);
+    }, 500);
+}
+</script>
 <?php
 /**
  * Генерація звіту по замовленнях

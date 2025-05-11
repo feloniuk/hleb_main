@@ -9,10 +9,10 @@ $pageTitle = $pageTitle ?? 'Система управління "Одеськи�
 // Отримання поточного користувача
 $currentUser = null;
 if (isset($_SESSION['id'])) {
-    $userId = $_SESSION['id'];
+    $userMainId = $_SESSION['id'];
     $userQuery = "SELECT * FROM polzovateli WHERE id = ?";
     $stmt = mysqli_prepare($connection, $userQuery);
-    mysqli_stmt_bind_param($stmt, "i", $userId);
+    mysqli_stmt_bind_param($stmt, "i", $userMainId);
     mysqli_stmt_execute($stmt);
     $userResult = mysqli_stmt_get_result($stmt);
     
