@@ -24,16 +24,23 @@ if (!isset($_GET['barcode']) || empty($_GET['barcode'])) {
 }
 
 $barcode = $_GET['barcode'];
+
+// Валідація штрих-коду (має бути 8-значним числом)
+if (!preg_match('/^\d{8}$/', $barcode)) {
+    http_response_code(400);
+    echo json_encode([
+        'success' => false,
+        'message' => 'Невірний формат штрих-коду. Має бути 8-значне число'
+    ]);
+    exit;
+}
+
 $connection = connectDatabase();
 
-// В реальному проекті тут буде пошук за реальним штрих-кодом
-// Для демонстрації використовуємо ID продукту
-$productId = intval($barcode);
-
-// Отримання інформації про продукт
-$query = "SELECT * FROM product WHERE id = ?";
+// Пошук продукту за штрих-кодом
+$query = "SELECT * FROM product WHERE barcode = ?";
 $stmt = mysqli_prepare($connection, $query);
-mysqli_stmt_bind_param($stmt, "i", $productId);
+mysqli_stmt_bind_param($stmt, "s", $barcode);
 mysqli_stmt_execute($stmt);
 $result = mysqli_stmt_get_result($stmt);
 

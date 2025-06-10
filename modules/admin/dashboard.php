@@ -76,6 +76,12 @@ include_once '../../includes/header.php';
             <a class="nav-link" href="orders.php">
                 <i class="fas fa-clipboard-list"></i> Замовлення
             </a>
+            <a class="nav-link" href="video_surveillance.php">
+                <i class="fas fa-video"></i> Відеоспостереження
+            </a>
+            <a class="nav-link" href="barcodes.php">
+                <i class="fas fa-barcode"></i> Штрих-коди
+            </a>
             <a class="nav-link" href="settings.php">
                 <i class="fas fa-cogs"></i> Налаштування
             </a>

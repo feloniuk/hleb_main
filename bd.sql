@@ -227,3 +227,15 @@ ADD COLUMN IF NOT EXISTS `status` VARCHAR(20) DEFAULT 'нове' AFTER `doba`;
 
 -- Инициализация статусов для существующих заказов
 UPDATE `zayavki` SET `status` = 'нове' WHERE `status` IS NULL;
+-- Додавання поля barcode до таблиці product
+ALTER TABLE `product` 
+ADD COLUMN `barcode` VARCHAR(8) UNIQUE AFTER `id`;
+
+-- Генерація 8-значних штрих-кодів для існуючих продуктів
+-- Формат: 1000000X, де X - ID продукту
+UPDATE `product` 
+SET `barcode` = LPAD(10000000 + `id`, 8, '0')
+WHERE `barcode` IS NULL;
+
+-- Створення індексу для швидкого пошуку за штрих-кодом
+CREATE INDEX idx_product_barcode ON `product` (`barcode`);
